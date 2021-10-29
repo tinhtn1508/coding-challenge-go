@@ -1,6 +1,6 @@
-package seller
+package notifier
 
-func NewEmailProvider() *EmailProvider {
+func NewEmailProvider() IProvider {
 	return &EmailProvider{}
 }
 

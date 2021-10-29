@@ -2,7 +2,7 @@ package seller
 
 import "database/sql"
 
-func NewRepository(db *sql.DB) *Repository {
+func NewRepository(db *sql.DB) IRepository {
 	return &Repository{db: db}
 }
 
@@ -59,3 +59,28 @@ func (r *Repository) list() ([]*Seller, error) {
 	return sellers, nil
 }
 
+func (r *Repository) getTop(size int) ([]*Seller, error) {
+	rows, err := r.db.Query("select id_seller, name, email, phone, uuid from seller as s inner join (select fk_seller, count(*) as number"+
+		" from product group by fk_seller order by number desc limit ?) as p on s.id_seller = p.fk_seller", size)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var sellers []*Seller
+
+	for rows.Next() {
+		seller := &Seller{}
+
+		err := rows.Scan(&seller.SellerID, &seller.Name, &seller.Email, &seller.Phone, &seller.UUID)
+		if err != nil {
+			return nil, err
+		}
+
+		sellers = append(sellers, seller)
+	}
+
+	return sellers, nil
+}

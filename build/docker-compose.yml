@@ -24,6 +24,7 @@ services:
     command: go run api.go
     environment:
       - LISTEN=:8080
+      - NOTIFY_TYPE=sms
     depends_on:
       - db
     links:

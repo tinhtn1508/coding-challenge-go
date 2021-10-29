@@ -1,30 +1,33 @@
-package product
+package v2
 
 import (
+	"coding-challenge-go/pkg/api/notifier"
 	"coding-challenge-go/pkg/api/seller"
 	"encoding/json"
+	"fmt"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"net/http"
 )
 
 const (
 	LIST_PAGE_SIZE = 10
 )
 
-func NewController(repository *repository, sellerRepository *seller.Repository, sellerEmailProvider *seller.EmailProvider) *controller {
+func NewControllerV2(repository IRepository, sellerRepository seller.IRepository, noti notifier.INotifier) IController {
 	return &controller{
-		repository: repository,
+		repository:       repository,
 		sellerRepository: sellerRepository,
-		sellerEmailProvider: sellerEmailProvider,
+		sellerNoti:       noti,
 	}
 }
 
 type controller struct {
-	repository *repository
-	sellerRepository *seller.Repository
-	sellerEmailProvider *seller.EmailProvider
+	repository       IRepository
+	sellerRepository seller.IRepository
+	sellerNoti       notifier.INotifier
 }
 
 func (pc *controller) List(c *gin.Context) {
@@ -37,12 +40,23 @@ func (pc *controller) List(c *gin.Context) {
 		return
 	}
 
-	products, err  := pc.repository.list((request.Page - 1) * LIST_PAGE_SIZE, LIST_PAGE_SIZE)
+	products, err := pc.repository.list((request.Page-1)*LIST_PAGE_SIZE, LIST_PAGE_SIZE)
 
 	if err != nil {
 		log.Error().Err(err).Msg("Fail to query product list")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Fail to query product list"})
 		return
+	}
+
+	for _, p := range products {
+		p.Seller = &productSeller{
+			UUID: p.SellerUUID,
+			Link: map[string]interface{}{
+				"self": map[string]string{
+					"href": fmt.Sprintf("http://localhost:8080/sellers/%s", p.SellerUUID),
+				},
+			},
+		}
 	}
 
 	productsJson, err := json.Marshal(products)
@@ -74,6 +88,15 @@ func (pc *controller) Get(c *gin.Context) {
 		return
 	}
 
+	product.Seller = &productSeller{
+		UUID: product.SellerUUID,
+		Link: map[string]interface{}{
+			"self": map[string]string{
+				"href": fmt.Sprintf("http://localhost:8080/sellers/%s", product.SellerUUID),
+			},
+		},
+	}
+
 	productJson, err := json.Marshal(product)
 
 	if err != nil {
@@ -87,9 +110,9 @@ func (pc *controller) Get(c *gin.Context) {
 
 func (pc *controller) Post(c *gin.Context) {
 	request := &struct {
-		Name string `form:"name"`
-		Brand string `form:"brand"`
-		Stock int `form:"stock"`
+		Name   string `form:"name"`
+		Brand  string `form:"brand"`
+		Stock  int    `form:"stock"`
 		Seller string `form:"seller"`
 	}{}
 
@@ -112,11 +135,11 @@ func (pc *controller) Post(c *gin.Context) {
 	}
 
 	product := &product{
-		UUID:      uuid.New().String(),
-		Name:      request.Name,
-		Brand:     request.Brand,
-		Stock:     request.Stock,
-		SellerUUID:    seller.UUID,
+		UUID:       uuid.New().String(),
+		Name:       request.Name,
+		Brand:      request.Brand,
+		Stock:      request.Stock,
+		SellerUUID: seller.UUID,
 	}
 
 	err = pc.repository.insert(product)
@@ -157,9 +180,9 @@ func (pc *controller) Put(c *gin.Context) {
 	}
 
 	request := &struct {
-		Name string `form:"name"`
+		Name  string `form:"name"`
 		Brand string `form:"brand"`
-		Stock int `form:"stock"`
+		Stock int    `form:"stock"`
 	}{}
 
 	if err := c.ShouldBindJSON(request); err != nil {
@@ -190,7 +213,11 @@ func (pc *controller) Put(c *gin.Context) {
 			return
 		}
 
-		pc.sellerEmailProvider.StockChanged(oldStock, product.Stock, seller.Email)
+		pc.sellerNoti.Send(&notifier.NoticationInfo{
+			SellerUUID:  seller.UUID,
+			SellerPhone: seller.Phone,
+			ProductName: product.Name,
+		})
 	}
 
 	jsonData, err := json.Marshal(product)

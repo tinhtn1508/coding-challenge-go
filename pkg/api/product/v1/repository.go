@@ -1,10 +1,10 @@
-package product
+package v1
 
 import (
 	"database/sql"
 )
 
-func NewRepository(db *sql.DB) *repository {
+func NewRepository(db *sql.DB) IRepository {
 	return &repository{db: db}
 }
 
@@ -56,10 +56,10 @@ func (r *repository) update(product *product) error {
 
 func (r *repository) list(offset int, limit int) ([]*product, error) {
 	rows, err := r.db.Query(
-		"SELECT p.id_product, p.name, p.brand, p.stock, s.uuid, p.uuid FROM product p " +
+		"SELECT p.id_product, p.name, p.brand, p.stock, s.uuid, p.uuid FROM product p "+
 			"INNER JOIN seller s ON(s.id_seller = p.fk_seller) LIMIT ? OFFSET ?",
-			limit, offset,
-		)
+		limit, offset,
+	)
 
 	if err != nil {
 		return nil, err
@@ -81,14 +81,15 @@ func (r *repository) list(offset int, limit int) ([]*product, error) {
 		products = append(products, product)
 	}
 
-	return products, nil}
+	return products, nil
+}
 
 func (r *repository) findByUUID(uuid string) (*product, error) {
 	rows, err := r.db.Query(
-		"SELECT p.id_product, p.name, p.brand, p.stock, s.uuid, p.uuid FROM product p " +
+		"SELECT p.id_product, p.name, p.brand, p.stock, s.uuid, p.uuid FROM product p "+
 			"INNER JOIN seller s ON(s.id_seller = p.fk_seller) WHERE p.uuid = ?",
-			uuid,
-		)
+		uuid,
+	)
 
 	if err != nil {
 		return nil, err
